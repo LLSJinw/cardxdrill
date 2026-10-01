@@ -240,25 +240,12 @@ def reveal_all_cards():
         for c in st.session_state.cards[ph]:
             c["flipped"] = True
 
-def shuffle_to_new_order(cards: List[Dict]) -> List[Dict]:
-    """Shuffle cards and avoid returning the same visible order when possible."""
-    if len(cards) < 2:
-        return cards
-
-    original_ids = [c["id"] for c in cards]
-    shuffled = cards[:]
-    for _ in range(8):
-        random.shuffle(shuffled)
-        if [c["id"] for c in shuffled] != original_ids:
-            return shuffled
-
-    return cards[1:] + cards[:1]
-
-def shuffle_unflipped_in_phase(phase_name: str):
-    pcs = st.session_state.cards[phase_name]
-    flipped = [c for c in pcs if c["flipped"]]
-    unflipped = [c for c in pcs if not c["flipped"]]
-    st.session_state.cards[phase_name] = flipped + shuffle_to_new_order(unflipped)
+def reset_phase_cards(phase_name: str):
+    """Turn every card in one phase face-down again, without changing other phases."""
+    for card in st.session_state.cards[phase_name]:
+        card["flipped"] = False
+    if st.session_state.zoom and st.session_state.zoom[0] == phase_name:
+        st.session_state.zoom = None
 
 def flip_card(phase_name: str, idx: int):
     """Free flip — any card, any time. No draws, no locks, no eligibility checks."""
@@ -306,12 +293,12 @@ with st.sidebar:
     st.caption("Phase 4: all teams answer one card each.")
     st.markdown("---")
 
-    st.caption("Shuffle unflipped cards")
-    shuffle_cols = st.columns(4, gap="small")
+    st.caption("Reset phase cards")
+    reset_cols = st.columns(4, gap="small")
     for i, ph in enumerate(PHASES, start=1):
-        with shuffle_cols[i - 1]:
-            st.button("\U0001F500 " + str(i), on_click=shuffle_unflipped_in_phase,
-                      args=(ph,), use_container_width=True, key=f"shuf_{ph}")
+        with reset_cols[i - 1]:
+            st.button("\U0001F504 " + str(i), on_click=reset_phase_cards,
+                      args=(ph,), use_container_width=True, key=f"reset_{ph}")
 
 # ---------- Main ----------
 st.caption("Click **Flip** on any card, any phase, any time — nothing is locked. Click **Zoom** once it's flipped.")
