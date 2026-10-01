@@ -241,9 +241,11 @@ def reveal_all_cards():
             c["flipped"] = True
 
 def reset_phase_cards(phase_name: str):
-    """Turn every card in one phase face-down again, without changing other phases."""
-    for card in st.session_state.cards[phase_name]:
+    """Turn one phase face-down and redeal its card order."""
+    phase_cards = st.session_state.cards[phase_name]
+    for card in phase_cards:
         card["flipped"] = False
+    random.shuffle(phase_cards)
     if st.session_state.zoom and st.session_state.zoom[0] == phase_name:
         st.session_state.zoom = None
 
