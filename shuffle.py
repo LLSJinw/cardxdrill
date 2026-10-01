@@ -4,7 +4,8 @@
 # WHAT THIS APP DOES: a clean, fully manual flip-reveal board. Every card in every
 # phase can be flipped at any time, in any order — no draws, no locks, no picker.
 # The facilitator (speaker) runs the actual game logic out loud; the app's only job
-# is to reveal a card's art on click. Team selection and scoring stay outside the app.
+# is to reveal a card's art on click and show an optional Phase 1-3 team draw.
+# Scoring and final facilitation decisions stay outside the app.
 #
 # Content stock (edit PHASE_CARD_NUMBERS below if the grouping ever changes):
 #   Ph.1 StdQ3 + RanQ2   Ph.2 StdQ3 + RanQ2   Ph.3 StdQ3 + RanQ2   Ph.4 StdQ3 + RanQ3
@@ -54,6 +55,9 @@ PHASE_CARD_NUMBERS: Dict[str, List[int]] = {
 PHASES: Dict[str, List[str]] = {
     ph: [f"card{n:02d}" for n in nums] for ph, nums in PHASE_CARD_NUMBERS.items()
 }
+RANDOM_TEAM_PHASES: List[str] = list(PHASE_CARD_NUMBERS.keys())[:3]
+TEAMS: List[str] = ["Team A", "Team B", "Team C"]
+TEAM_COLORS: Dict[str, str] = {"Team A": "#D9822B", "Team B": "#028090", "Team C": "#6B4E8E"}
 
 # Optional short caption under a flipped card. Leave blank if the card art already
 # contains the full question — these are just an extra on-screen reminder if you want one.
@@ -101,6 +105,15 @@ st.markdown(f"""
 }}
 .hr-compact {{ margin: 0.8rem 0 1.1rem 0; border: 0; height: 1px; background: rgba(255,255,255,.15); }}
 .badge {{ display:inline-block; padding:.15rem .5rem; margin-left:.4rem; border-radius: 999px; font-size:.75rem; background:rgba(255,255,255,.14); }}
+
+/* Sidebar random team menu */
+.draw-card {{
+  margin: .4rem 0; padding: .55rem .6rem; border-radius: 10px;
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.10);
+}}
+.draw-phase {{ font-size: .78rem; color: #bcd0d8; margin-bottom: .15rem; }}
+.draw-team {{ font-size: 1rem; font-weight: 800; }}
+.team-dot {{ width: .65rem; height: .65rem; border-radius: 50%; display: inline-block; margin-right: .4rem; }}
 
 /* Card reveal */
 .card-container {{ width: 288px; height: 432px; margin: .3rem auto 0 auto; }}
@@ -200,22 +213,52 @@ def init():
 
 init()
 
+def init_phase_team_draw():
+    if "phase_team_draw" not in st.session_state:
+        st.session_state.phase_team_draw = {ph: None for ph in RANDOM_TEAM_PHASES}
+
+init_phase_team_draw()
+
 # ---------- Admin / helpers ----------
 def reset_all():
     st.session_state.pop("cards", None)
     init()
+
+def draw_phase_teams():
+    """Randomly assign Team A/B/C to Phases 1-3 without replacement."""
+    teams = TEAMS[:]
+    random.shuffle(teams)
+    st.session_state.phase_team_draw = {
+        phase_name: teams[i] for i, phase_name in enumerate(RANDOM_TEAM_PHASES)
+    }
+
+def clear_phase_team_draw():
+    st.session_state.phase_team_draw = {ph: None for ph in RANDOM_TEAM_PHASES}
 
 def reveal_all_cards():
     for ph in st.session_state.cards:
         for c in st.session_state.cards[ph]:
             c["flipped"] = True
 
+def shuffle_to_new_order(cards: List[Dict]) -> List[Dict]:
+    """Shuffle cards and avoid returning the same visible order when possible."""
+    if len(cards) < 2:
+        return cards
+
+    original_ids = [c["id"] for c in cards]
+    shuffled = cards[:]
+    for _ in range(8):
+        random.shuffle(shuffled)
+        if [c["id"] for c in shuffled] != original_ids:
+            return shuffled
+
+    return cards[1:] + cards[:1]
+
 def shuffle_unflipped_in_phase(phase_name: str):
     pcs = st.session_state.cards[phase_name]
     flipped = [c for c in pcs if c["flipped"]]
     unflipped = [c for c in pcs if not c["flipped"]]
-    random.shuffle(unflipped)
-    st.session_state.cards[phase_name] = flipped + unflipped
+    st.session_state.cards[phase_name] = flipped + shuffle_to_new_order(unflipped)
 
 def flip_card(phase_name: str, idx: int):
     """Free flip — any card, any time. No draws, no locks, no eligibility checks."""
@@ -240,10 +283,35 @@ with st.sidebar:
     st.button("\U0001F440 Reveal ALL Cards Now", on_click=reveal_all_cards, use_container_width=True)
     st.button("\U0001F504 Reset All Cards", on_click=reset_all, use_container_width=True)
     st.markdown("---")
-    st.subheader("Shuffle unflipped cards")
-    for ph in PHASES:
-        st.button(f"\U0001F500 {ph}", on_click=shuffle_unflipped_in_phase,
-                  args=(ph,), use_container_width=True, key=f"shuf_{ph}")
+
+    st.header("Random Team Menu")
+    st.caption("Use for Phase 1-3 only. Draw once to decide which team answers each phase.")
+    st.button("\U0001F3B2 Draw Team A/B/C for Phase 1-3", on_click=draw_phase_teams, use_container_width=True)
+    st.button("Clear Team Draw", on_click=clear_phase_team_draw, use_container_width=True)
+
+    phase_team_draw = st.session_state.phase_team_draw
+    for i, ph in enumerate(RANDOM_TEAM_PHASES, start=1):
+        team = phase_team_draw.get(ph)
+        color = TEAM_COLORS.get(team, "#788795") if team else "#788795"
+        team_label = team if team else "Not drawn yet"
+        st.markdown(
+            f"""
+            <div class="draw-card">
+              <div class="draw-phase">Phase {i}</div>
+              <div class="draw-team"><span class="team-dot" style="background:{color}"></span>{team_label}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    st.caption("Phase 4: all teams answer one card each.")
+    st.markdown("---")
+
+    st.caption("Shuffle unflipped cards")
+    shuffle_cols = st.columns(4, gap="small")
+    for i, ph in enumerate(PHASES, start=1):
+        with shuffle_cols[i - 1]:
+            st.button("\U0001F500 " + str(i), on_click=shuffle_unflipped_in_phase,
+                      args=(ph,), use_container_width=True, key=f"shuf_{ph}")
 
 # ---------- Main ----------
 st.caption("Click **Flip** on any card, any phase, any time — nothing is locked. Click **Zoom** once it's flipped.")
