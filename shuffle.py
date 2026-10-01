@@ -102,17 +102,14 @@ st.markdown(f"""
 .hr-compact {{ margin: 0.8rem 0 1.1rem 0; border: 0; height: 1px; background: rgba(255,255,255,.15); }}
 .badge {{ display:inline-block; padding:.15rem .5rem; margin-left:.4rem; border-radius: 999px; font-size:.75rem; background:rgba(255,255,255,.14); }}
 
-/* Card + Flip */
-.card-container {{ perspective: 1000px; }}
-.card {{ width: 288px; height: 432px; margin: .3rem auto 0 auto; position: relative; transition: transform .2s ease; }}
+/* Card reveal */
+.card-container {{ width: 288px; height: 432px; margin: .3rem auto 0 auto; }}
+.card {{
+  width: 288px; height: 432px; position: relative; transition: transform .2s ease;
+  border-radius: 12px; overflow: hidden; filter: drop-shadow(0 8px 14px rgba(0,0,0,.45));
+  background: rgba(0,0,0,.25);
+}}
 .card:hover {{ transform: translateY(-3px); }}
-.card-inner {{ position: absolute; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform 0.6s ease;
-  filter: drop-shadow(0 8px 14px rgba(0,0,0,.45)); }}
-.flipped .card-inner {{ transform: rotateY(180deg); }}
-.card-face {{ position: absolute; width: 100%; height: 100%; -webkit-backface-visibility: hidden; backface-visibility: hidden;
-  border-radius: 12px; overflow: hidden; }}
-.card-front {{ transform: rotateY(0deg); }}
-.card-back  {{ transform: rotateY(180deg); }}
 .img-fit {{ width: 100%; height: 100%; object-fit: cover; }}
 
 /* Zoom overlay */
@@ -266,15 +263,12 @@ def render_phase(phase_name: str):
             card = pcs[i]
             front = f"data:image/png;base64,{card['front']}"
             back = f"data:image/png;base64,{card['back']}"
-            flipped_class = "flipped" if card["flipped"] else ""
+            display_img = front if card["flipped"] else back
 
             st.markdown(f"""
             <div class="card-container">
-              <div class="card {flipped_class}">
-                <div class="card-inner">
-                  <div class="card-face card-front"><img class="img-fit" src="{back}"/></div>
-                  <div class="card-face card-back"><img class="img-fit" src="{front}"/></div>
-                </div>
+              <div class="card">
+                <img class="img-fit" src="{display_img}"/>
               </div>
             </div>
             """, unsafe_allow_html=True)
