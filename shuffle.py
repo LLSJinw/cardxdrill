@@ -4,7 +4,7 @@
 # WHAT THIS APP DOES: a clean, fully manual flip-reveal board. Every card in every
 # phase can be flipped at any time, in any order — no draws, no locks, no picker.
 # The facilitator (speaker) runs the actual game logic out loud; the app's only job
-# is to reveal a card's art on click and let you track team scores by hand.
+# is to reveal a card's art on click. Team selection and scoring stay outside the app.
 #
 # Content stock (edit PHASE_CARD_NUMBERS below if the grouping ever changes):
 #   Ph.1 StdQ3 + RanQ2   Ph.2 StdQ3 + RanQ2   Ph.3 StdQ3 + RanQ2   Ph.4 StdQ3 + RanQ3
@@ -39,10 +39,7 @@ try:
 except Exception:
     bg_css = "none;"
 
-# ================= CONFIG — edit this block as content/teams change =================
-TEAMS: List[str] = ["Team A", "Team B", "Team C"]
-TEAM_COLORS: Dict[str, str] = {"Team A": "#D9822B", "Team B": "#028090", "Team C": "#6B4E8E"}
-
+# ================= CONFIG — edit this block as content changes =================
 # Human-designed art goes straight in assets/card01.png ... card09.png — plain numbered
 # files, no renaming needed. Each phase owns a fixed group of numbers; on-screen slot
 # order is reshuffled every time the deck is (re)dealt, so layout isn't always identical.
@@ -105,13 +102,6 @@ st.markdown(f"""
 .hr-compact {{ margin: 0.8rem 0 1.1rem 0; border: 0; height: 1px; background: rgba(255,255,255,.15); }}
 .badge {{ display:inline-block; padding:.15rem .5rem; margin-left:.4rem; border-radius: 999px; font-size:.75rem; background:rgba(255,255,255,.14); }}
 
-/* Team legend */
-.legend-chip {{
-  display:inline-flex; align-items:center; gap:.4rem; margin-right: .9rem;
-  font-size:.85rem; font-weight:600; background: rgba(0,0,0,.35); padding:.2rem .55rem; border-radius: 999px;
-}}
-.legend-dot {{ width:.65rem; height:.65rem; border-radius:50%; display:inline-block; }}
-
 /* Card + Flip */
 .card-container {{ perspective: 1000px; }}
 .card {{ width: 288px; height: 432px; margin: .3rem auto 0 auto; position: relative; transition: transform .2s ease; }}
@@ -136,11 +126,10 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="title-bg">Phased TTX Card Deck — Random Questions</div>', unsafe_allow_html=True)
-legend_html = "".join(
-    f'<span class="legend-chip"><span class="legend-dot" style="background:{TEAM_COLORS[t]}"></span>{t}</span>'
-    for t in TEAMS
+st.markdown(
+    '<div class="subtitle-bg">Facilitator-controlled card reveal. Ask the team, then flip the chosen card manually.</div>',
+    unsafe_allow_html=True,
 )
-st.markdown(f'<div class="subtitle-bg">{legend_html}</div>', unsafe_allow_html=True)
 
 # ---------- Fallback card drawing (used if an image is missing) ----------
 def get_font(size: int):
@@ -210,7 +199,6 @@ def init():
         cards[ph] = phase_cards
 
     st.session_state.cards = cards
-    st.session_state.score = {t: 0 for t in TEAMS}
     st.session_state.zoom: Optional[tuple] = None
 
 init()
@@ -218,7 +206,6 @@ init()
 # ---------- Admin / helpers ----------
 def reset_all():
     st.session_state.pop("cards", None)
-    st.session_state.pop("score", None)
     init()
 
 def reveal_all_cards():
@@ -239,9 +226,6 @@ def flip_card(phase_name: str, idx: int):
     if not card["flipped"]:
         card["flipped"] = True
 
-def adjust_score(team: str, delta: int):
-    st.session_state.score[team] = max(0, st.session_state.score[team] + delta)
-
 def toggle_zoom(phase_name: str, idx: int):
     st.session_state.zoom = None if st.session_state.zoom == (phase_name, idx) else (phase_name, idx)
 
@@ -257,29 +241,12 @@ with st.sidebar:
         st.markdown("---")
 
     st.button("\U0001F440 Reveal ALL Cards Now", on_click=reveal_all_cards, use_container_width=True)
-    st.button("\U0001F504 Reset All (cards + scores)", on_click=reset_all, use_container_width=True)
+    st.button("\U0001F504 Reset All Cards", on_click=reset_all, use_container_width=True)
     st.markdown("---")
     st.subheader("Shuffle unflipped cards")
     for ph in PHASES:
         st.button(f"\U0001F500 {ph}", on_click=shuffle_unflipped_in_phase,
                   args=(ph,), use_container_width=True, key=f"shuf_{ph}")
-
-    st.markdown("---")
-    st.header("Teams & Score")
-    st.caption("Award points by hand, independent of which card is flipped — you're in control.")
-    for t in TEAMS:
-        c1, c2, c3 = st.columns([3, 1, 1])
-        with c1:
-            st.markdown(
-                f'<div style="display:flex;align-items:center;height:2.2rem;">'
-                f'<span class="legend-chip"><span class="legend-dot" style="background:{TEAM_COLORS[t]}"></span>{t}</span>'
-                f'<b style="margin-left:.4rem;">{st.session_state.score[t]}</b></div>',
-                unsafe_allow_html=True,
-            )
-        with c2:
-            st.button("+1", key=f"plus_{t}", on_click=adjust_score, args=(t, 1), use_container_width=True)
-        with c3:
-            st.button("−1", key=f"minus_{t}", on_click=adjust_score, args=(t, -1), use_container_width=True)
 
 # ---------- Main ----------
 st.caption("Click **Flip** on any card, any phase, any time — nothing is locked. Click **Zoom** once it's flipped.")
