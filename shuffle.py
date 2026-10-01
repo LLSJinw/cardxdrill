@@ -1,17 +1,17 @@
 # streamlit_app.py
-# Phased TTX Random-Q Card Deck — Mittare Cyber Drill 2026, Plan B
+# Phased TTX Random-Q Card Deck — Mittare Cyber Drill 2026
 #
-# WHAT THIS APP DOES (Random Questions only — Standard Qs run separately via Slido):
-#   Phase 1-3: a dice draw (no repeat) picks ONE team to play that phase's Random Q.
-#              The drawn team sees 2 cards (left/right) and flips ONLY ONE to answer;
-#              the other stays a locked decoy — adds suspense without adding scored items.
-#   Phase 4:   no draw needed — all 3 teams play, 1 card each, 3 cards total.
+# WHAT THIS APP DOES: a clean, fully manual flip-reveal board. Every card in every
+# phase can be flipped at any time, in any order — no draws, no locks, no picker.
+# The facilitator (speaker) runs the actual game logic out loud; the app's only job
+# is to reveal a card's art on click and let you track team scores by hand.
 #
-# Content stock needed (edit PHASES / STORY below once questions are finalized):
+# Content stock (edit PHASE_CARD_NUMBERS below if the grouping ever changes):
 #   Ph.1 StdQ3 + RanQ2   Ph.2 StdQ3 + RanQ2   Ph.3 StdQ3 + RanQ2   Ph.4 StdQ3 + RanQ3
 #   (Standard Qs are not in this app at all — this deck only renders the RanQ pool.)
 #
-# Supports real images under /assets; falls back to generated placeholders.
+# Art: drop human-made cards straight into assets/card01.png ... card09.png (plain
+# numbered files). Falls back to a generated placeholder if a number's file is missing.
 
 import os
 import base64, io, random, textwrap
@@ -22,7 +22,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 st.set_page_config(page_title="TTX Phased Deck", page_icon="🃏", layout="wide")
 
 # ---------- Assets ----------
-ASSET_DIR = "assets"  # holds back.png, and per-card front art named "<card id>.png" e.g. "RQ1-A.png"
+ASSET_DIR = "assets"  # holds back.png + per-card front art (card01.png ... card09.png)
 
 def load_image_b64(filename: str) -> str:
     """Read an image from assets and return base64 string."""
@@ -43,32 +43,25 @@ except Exception:
 TEAMS: List[str] = ["Team A", "Team B", "Team C"]
 TEAM_COLORS: Dict[str, str] = {"Team A": "#D9822B", "Team B": "#028090", "Team C": "#6B4E8E"}
 
-# Phase 1-3: exactly 2 ids each = the left/right decoy pair for the drawn team.
-# Phase 4: exactly 3 ids = one per team, all teams play, no draw / no decoy.
-# Swap any id below for a different pick from the full authored pool (shown in the comments).
-PHASES: Dict[str, List[str]] = {
-    "Phase 1 – Detection & Analysis":          ["RQ1-A", "RQ1-B"],   # full pool: RQ1-A / RQ1-B / RQ1-C
-    "Phase 2 – Containment & Eradication":      ["RQ2-B", "RQ2-C"],   # full pool: RQ2-A / RQ2-B / RQ2-C
-    "Phase 3 – Core Disruption & Data Breach":  ["RQ3-B", "RQ3-C"],   # full pool: RQ3-A / RQ3-B / RQ3-C
-    "Phase 4 – Post-Incident & Resilience":     ["RQ4-A", "RQ4-B", "RQ4-C"],  # always all 3
+# Human-designed art goes straight in assets/card01.png ... card09.png — plain numbered
+# files, no renaming needed. Each phase owns a fixed group of numbers; on-screen slot
+# order is reshuffled every time the deck is (re)dealt, so layout isn't always identical.
+#   Phase 1: card01, card02            Phase 3: card05, card06
+#   Phase 2: card03, card04            Phase 4: card07, card08, card09
+PHASE_CARD_NUMBERS: Dict[str, List[int]] = {
+    "Phase 1 – Detection & Analysis":          [1, 2],
+    "Phase 2 – Containment & Eradication":      [3, 4],
+    "Phase 3 – Core Disruption & Data Breach":  [5, 6],
+    "Phase 4 – Post-Incident & Resilience":     [7, 8, 9],
 }
-DRAW_PHASES = list(PHASES.keys())[:3]     # Phase 1-3: dice-draw + decoy-card mechanic
-ALL_PLAY_PHASE = list(PHASES.keys())[3]   # Phase 4: all 3 teams, no draw
+PHASES: Dict[str, List[str]] = {
+    ph: [f"card{n:02d}" for n in nums] for ph, nums in PHASE_CARD_NUMBERS.items()
+}
 
-# Short facilitator-facing labels — replace with final wording once the Word doc is locked.
+# Optional short caption under a flipped card. Leave blank if the card art already
+# contains the full question — these are just an extra on-screen reminder if you want one.
 STORY: Dict[str, str] = {
-    "RQ1-A": "Wait for more information before acting?",
-    "RQ1-B": "Business still running — pause IR or continue?",
-    "RQ1-C": "3rd party denies sending the email — now what?",
-    "RQ2-A": "Multiple systems affected — widen isolation?",
-    "RQ2-B": "Power off now, or disconnect first?",
-    "RQ2-C": "3rd-party remote access — restrict or leave alone?",
-    "RQ3-A": "Regulator asks for an update mid-investigation.",
-    "RQ3-B": "Customer / media pressure — how do we respond?",
-    "RQ3-C": "Attacker offers to delete data if ransom is paid.",
-    "RQ4-A": "Media reports Mittare hid the breach.",
-    "RQ4-B": "RCA finds vendor access was broader than needed.",
-    "RQ4-C": "New indicator found after recovery — close or dig in?",
+    # "card01": "Wait for more information before acting?",
 }
 # =======================================================================================
 
@@ -119,22 +112,6 @@ st.markdown(f"""
 }}
 .legend-dot {{ width:.65rem; height:.65rem; border-radius:50%; display:inline-block; }}
 
-/* Draw banner */
-.draw-banner {{
-  display:inline-block; font-size:.85rem; font-weight:700; padding:.3rem .6rem;
-  border-radius: 8px; margin-bottom:.5rem; color:#0e1525;
-}}
-.draw-pending {{
-  display:inline-block; font-size:.8rem; font-style:italic; padding:.3rem .6rem;
-  border-radius: 8px; margin-bottom:.5rem; background: rgba(255,255,255,.1); color:#cfd6da;
-}}
-
-/* Card team strip (Phase 4) */
-.team-strip {{
-  font-size:.78rem; font-weight:700; text-align:center; padding:.18rem 0;
-  border-radius: 6px 6px 0 0; color:#0e1525; margin: 0 auto; width: 288px;
-}}
-
 /* Card + Flip */
 .card-container {{ perspective: 1000px; }}
 .card {{ width: 288px; height: 432px; margin: .3rem auto 0 auto; position: relative; transition: transform .2s ease; }}
@@ -147,7 +124,6 @@ st.markdown(f"""
 .card-front {{ transform: rotateY(0deg); }}
 .card-back  {{ transform: rotateY(180deg); }}
 .img-fit {{ width: 100%; height: 100%; object-fit: cover; }}
-.card.locked-decoy {{ opacity: .45; filter: grayscale(.6); }}
 
 /* Zoom overlay */
 .overlay {{ position: fixed; inset: 0; background: rgba(0,0,0,0.72); display: flex; align-items: center; justify-content: center;
@@ -213,9 +189,12 @@ def init():
         back_b64 = pil_to_b64(draw_card_back())
 
     cards: Dict[str, List[Dict]] = {}
-    for ph, ids in PHASES.items():
+    for ph, numbers in PHASE_CARD_NUMBERS.items():
+        shuffled_numbers = numbers[:]
+        random.shuffle(shuffled_numbers)  # fresh on-screen order every deal/reset
         phase_cards = []
-        for qid in ids:
+        for n in shuffled_numbers:
+            qid = f"card{n:02d}"
             img_filename = f"{qid}.png"
             img_path = os.path.join(ASSET_DIR, img_filename)
             if os.path.exists(img_path):
@@ -226,14 +205,11 @@ def init():
             else:
                 front_b64 = pil_to_b64(draw_front(qid, STORY.get(qid, "")))
             phase_cards.append({
-                "id": qid, "front": front_b64, "back": back_b64,
-                "flipped": False, "owner": None,
+                "id": qid, "front": front_b64, "back": back_b64, "flipped": False,
             })
         cards[ph] = phase_cards
 
     st.session_state.cards = cards
-    st.session_state.draw: Dict[str, str] = {}          # Phase 1-3 only: phase -> assigned team
-    st.session_state.draw_pool: List[str] = TEAMS[:]     # remaining undrawn teams (no-repeat draw)
     st.session_state.score = {t: 0 for t in TEAMS}
     st.session_state.zoom: Optional[tuple] = None
 
@@ -242,19 +218,13 @@ init()
 # ---------- Admin / helpers ----------
 def reset_all():
     st.session_state.pop("cards", None)
-    st.session_state.pop("draw", None)
-    st.session_state.pop("draw_pool", None)
     st.session_state.pop("score", None)
     init()
 
-def reset_draws():
-    """Re-roll who plays Phase 1-3 without touching flipped cards/scores already made."""
-    st.session_state.draw = {}
-    st.session_state.draw_pool = TEAMS[:]
-    for ph in DRAW_PHASES:
+def reveal_all_cards():
+    for ph in st.session_state.cards:
         for c in st.session_state.cards[ph]:
-            c["flipped"] = False
-            c["owner"] = None
+            c["flipped"] = True
 
 def shuffle_unflipped_in_phase(phase_name: str):
     pcs = st.session_state.cards[phase_name]
@@ -263,35 +233,14 @@ def shuffle_unflipped_in_phase(phase_name: str):
     random.shuffle(unflipped)
     st.session_state.cards[phase_name] = flipped + unflipped
 
-def draw_team_for_phase(phase_name: str):
-    """No-repeat dice draw: picks from teams not yet drawn in Phase 1-3."""
-    if phase_name in st.session_state.draw:
-        return
-    pool = st.session_state.draw_pool
-    if not pool:
-        return
-    team = random.choice(pool)
-    pool.remove(team)
-    st.session_state.draw[phase_name] = team
-
 def flip_card(phase_name: str, idx: int):
-    pcs = st.session_state.cards[phase_name]
-    card = pcs[idx]
-    if card["flipped"]:
-        return
+    """Free flip — any card, any time. No draws, no locks, no eligibility checks."""
+    card = st.session_state.cards[phase_name][idx]
+    if not card["flipped"]:
+        card["flipped"] = True
 
-    if phase_name in DRAW_PHASES:
-        team = st.session_state.draw.get(phase_name)
-        if team is None:
-            return  # must draw first
-        if any(c["flipped"] for c in pcs):
-            return  # only 1 of the 2 cards may be answered per phase
-    else:
-        team = TEAMS[idx]  # Phase 4: fixed 1 card per team, by position
-
-    card["flipped"] = True
-    card["owner"] = team
-    st.session_state.score[team] += 1
+def adjust_score(team: str, delta: int):
+    st.session_state.score[team] = max(0, st.session_state.score[team] + delta)
 
 def toggle_zoom(phase_name: str, idx: int):
     st.session_state.zoom = None if st.session_state.zoom == (phase_name, idx) else (phase_name, idx)
@@ -307,69 +256,42 @@ with st.sidebar:
         st.caption("Visible only while a card is zoomed.")
         st.markdown("---")
 
-    reveal_all_global = st.checkbox("Reveal all cards (demo / override)", value=False)
-
+    st.button("\U0001F440 Reveal ALL Cards Now", on_click=reveal_all_cards, use_container_width=True)
+    st.button("\U0001F504 Reset All (cards + scores)", on_click=reset_all, use_container_width=True)
     st.markdown("---")
-    st.subheader("\U0001F3B2 Team Draw — Phase 1–3")
-    st.caption("Each phase draws from teams not yet picked, so every team plays exactly once across Phase 1–3.")
-    for ph in DRAW_PHASES:
-        drawn = st.session_state.draw.get(ph)
-        label = f"Draw team — {ph.split('–')[0].strip()}"
-        if drawn:
-            st.markdown(
-                f'<div class="draw-banner" style="background:{TEAM_COLORS[drawn]}">{ph.split("–")[0].strip()} → {drawn}</div>',
-                unsafe_allow_html=True,
-            )
-        else:
-            st.button(label, on_click=draw_team_for_phase, args=(ph,), use_container_width=True,
-                      disabled=not st.session_state.draw_pool, key=f"draw_{ph}")
-    if not st.session_state.draw_pool and len(st.session_state.draw) == len(DRAW_PHASES):
-        st.caption("All 3 teams drawn — each plays exactly once in Phase 1–3.")
-    st.button("↻ Reset Draws (keep scores elsewhere)", on_click=reset_draws, use_container_width=True)
-
-    st.markdown("---")
-    st.subheader("Reset")
-    st.button("\U0001F504 Reset All (cards + draws + scores)", on_click=reset_all, use_container_width=True)
+    st.subheader("Shuffle unflipped cards")
     for ph in PHASES:
-        st.button(f"\U0001F500 Shuffle Unflipped — {ph}", on_click=shuffle_unflipped_in_phase,
+        st.button(f"\U0001F500 {ph}", on_click=shuffle_unflipped_in_phase,
                   args=(ph,), use_container_width=True, key=f"shuf_{ph}")
 
     st.markdown("---")
     st.header("Teams & Score")
+    st.caption("Award points by hand, independent of which card is flipped — you're in control.")
     for t in TEAMS:
-        st.markdown(
-            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem;">'
-            f'<span class="legend-chip"><span class="legend-dot" style="background:{TEAM_COLORS[t]}"></span>{t}</span>'
-            f'<b>{st.session_state.score[t]}</b></div>',
-            unsafe_allow_html=True,
-        )
+        c1, c2, c3 = st.columns([3, 1, 1])
+        with c1:
+            st.markdown(
+                f'<div style="display:flex;align-items:center;height:2.2rem;">'
+                f'<span class="legend-chip"><span class="legend-dot" style="background:{TEAM_COLORS[t]}"></span>{t}</span>'
+                f'<b style="margin-left:.4rem;">{st.session_state.score[t]}</b></div>',
+                unsafe_allow_html=True,
+            )
+        with c2:
+            st.button("+1", key=f"plus_{t}", on_click=adjust_score, args=(t, 1), use_container_width=True)
+        with c3:
+            st.button("−1", key=f"minus_{t}", on_click=adjust_score, args=(t, -1), use_container_width=True)
 
 # ---------- Main ----------
-st.caption(
-    "Phase 1–3: draw a team in the sidebar, then that team flips ONE of 2 cards (the other stays a locked decoy). "
-    "Phase 4: all 3 teams play — 1 card each, no draw needed. Click **Zoom** on a flipped card."
-)
+st.caption("Click **Flip** on any card, any phase, any time — nothing is locked. Click **Zoom** once it's flipped.")
 
 def render_phase(phase_name: str):
     pcs = st.session_state.cards[phase_name]
     picked = sum(c["flipped"] for c in pcs)
-    is_draw_phase = phase_name in DRAW_PHASES
-    limit = 1 if is_draw_phase else len(pcs)
 
     st.markdown(
-        f'<div class="phase-title">{phase_name} <span class="badge">{picked}/{limit}</span></div>',
+        f'<div class="phase-title">{phase_name} <span class="badge">{picked}/{len(pcs)}</span></div>',
         unsafe_allow_html=True,
     )
-
-    drawn_team = st.session_state.draw.get(phase_name) if is_draw_phase else None
-    if is_draw_phase:
-        if drawn_team:
-            st.markdown(
-                f'<div class="draw-banner" style="background:{TEAM_COLORS[drawn_team]}">\U0001F3B2 {drawn_team} plays this phase’s Random Q</div>',
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown('<div class="draw-pending">\U0001F3B2 Waiting on team draw (sidebar) before cards can be flipped…</div>', unsafe_allow_html=True)
 
     cols = st.columns(len(pcs), gap="small")
     for i, col in enumerate(cols):
@@ -379,27 +301,9 @@ def render_phase(phase_name: str):
             back = f"data:image/png;base64,{card['back']}"
             flipped_class = "flipped" if card["flipped"] else ""
 
-            # eligibility
-            if is_draw_phase:
-                already_answered = any(c["flipped"] for c in pcs)
-                eligible = (drawn_team is not None) and not already_answered
-                is_locked_decoy = already_answered and not card["flipped"]
-            else:
-                eligible = True
-                is_locked_decoy = False
-
-            # team strip (Phase 4 shows fixed owner; draw-phases show drawn team once known)
-            strip_team = TEAMS[i] if not is_draw_phase else drawn_team
-            if strip_team and not is_locked_decoy:
-                st.markdown(
-                    f'<div class="team-strip" style="background:{TEAM_COLORS[strip_team]}">{strip_team}</div>',
-                    unsafe_allow_html=True,
-                )
-
-            locked_cls = " locked-decoy" if is_locked_decoy else ""
             st.markdown(f"""
             <div class="card-container">
-              <div class="card {flipped_class}{locked_cls}">
+              <div class="card {flipped_class}">
                 <div class="card-inner">
                   <div class="card-face card-front"><img class="img-fit" src="{back}"/></div>
                   <div class="card-face card-back"><img class="img-fit" src="{front}"/></div>
@@ -410,18 +314,14 @@ def render_phase(phase_name: str):
 
             b1, b2 = st.columns(2, gap="small")
             with b1:
-                flip_disabled = card["flipped"] or (not reveal_all_global and not eligible)
                 st.button("Flip", key=f"flip_{phase_name}_{i}", on_click=flip_card,
-                          args=(phase_name, i), disabled=flip_disabled, use_container_width=True)
+                          args=(phase_name, i), disabled=card["flipped"], use_container_width=True)
             with b2:
                 st.button("Zoom", key=f"zoom_{phase_name}_{i}", on_click=toggle_zoom,
                           args=(phase_name, i), disabled=not card["flipped"], use_container_width=True)
 
-            if card["flipped"]:
-                st.caption(f"**{card['id']}** → {card['owner']}")
-                st.caption(STORY.get(card["id"], ""))
-            elif is_locked_decoy:
-                st.caption("_Not selected this round_")
+            if card["flipped"] and STORY.get(card["id"]):
+                st.caption(STORY[card["id"]])
 
 # 2x2 matrix layout
 row1 = st.columns(2, gap="large")
